@@ -974,6 +974,16 @@ def t_vec(t):
     return vec
 
 
+def t_last_arg(t):
+    # Get the argument value from the template.
+    v = t.arguments[-1]
+    # If it does not exist, return empty string.
+    if v is None:
+        return ""
+    # Otherwise clean the value.
+    return clean_value(v.value)
+
+
 def t_arg(t, arg):
     """Retrieves argument ``arg`` from the template.  The argument may be
     identified either by its number or a string name.  Positional argument
@@ -2054,6 +2064,8 @@ def parse_any(word, base, data, text, pos, sectitle, p, capture_translations):
     information that might be in any section and that can be interpreted
     without knowing the specific section."""
     translation_sense = None
+    names = ("t", "t+", "t-simple", "t+check", "t-check", "t+he", "t-")
+    
     for t in p.templates:
         name = t.name.strip()
         # Alternative forms seem to provide alternative forms with dialectal
@@ -2066,7 +2078,8 @@ def parse_any(word, base, data, text, pos, sectitle, p, capture_translations):
             data_append(data, "isbn", t_arg(t, 1))
         # This template marks the beginning of a group of translations, and
         # may provide a word sense for the translations.
-        elif name == "trans-top":
+
+        elif name in ("trans-top", "trans-top-see"):
             translation_sense = t_arg(t, 1)
         elif name == "trans-bottom":
             translation_sense = None
@@ -2080,7 +2093,7 @@ def parse_any(word, base, data, text, pos, sectitle, p, capture_translations):
         #   sense - word sense the translation is for (free text)
         #   markers - markers for the translation, e.g., gender
         #   roman   - romanization of the translation, if available
-        elif name in ("t", "t+"):  # translations
+        elif name in names:  # translations
             if capture_translations:
                 vec = t_vec(t)
                 if len(vec) < 2:
@@ -2092,6 +2105,8 @@ def parse_any(word, base, data, text, pos, sectitle, p, capture_translations):
                 roman = t_arg(t, "tr")
                 script = t_arg(t, "sc")
                 t = {"lang": lang, "word": transl}
+                if "check" in name:
+                    t["unchecked"] = True
                 if translation_sense:
                     t["sense"] = translation_sense
                 if markers:
@@ -2103,6 +2118,23 @@ def parse_any(word, base, data, text, pos, sectitle, p, capture_translations):
                 if script:
                     t["script"] = script
                 data_append(data, "translations", t)
+
+        elif name == "not used":
+            if capture_translations:
+                lang = t_arg(t, 1)
+                t = {"lang": lang, "word": "not used"}
+                if translation_sense:
+                    t["sense"] = translation_sense
+                data_append(data, "translations", t)
+
+        elif name in ("trans-see", "trans-top-see"):
+            if capture_translations:
+                t = { 
+                    "word": t_last_arg(t), 
+                    "sence": t_arg(t, 1)
+                }
+                data_append(data, "translations_redirect", t)
+
         # Collect any conjugation/declension information for the word.
         # These are highly language-specific, and this may require tweaking
         # as support for more languages is added.
